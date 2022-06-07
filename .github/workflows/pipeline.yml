@@ -1,0 +1,68 @@
+name: GitHub Actions Demo
+on:
+  workflow_dispatch:
+  # push:
+  #   branches:    
+  #   - 'main'
+
+ 
+
+env:
+  ARM_CLIENT_ID: ${{secrets.SP_ID_TST}}
+  ARM_CLIENT_SECRET: ${{secrets.SP_SECRET_TST}}
+  ARM_SUBSCRIPTION_ID: ${{secrets.SUBSCRIPTION_ID_TST}}
+  ARM_TENANT_ID: ${{secrets.TENANT_ID_TST}}
+
+defaults:
+  run:
+    working-directory: ./terraform/resources
+
+jobs:
+  terraform-linter:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        # Full git history is needed to get a proper list of changed files within `super-linter`
+        fetch-depth: 0
+    - name: Lint Code Base
+      uses: github/super-linter@v4
+      env:
+        DEFAULT_BRANCH: ${{ github.ref }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        DISABLE_ERRORS: true   # Ignore errors 
+
+  terraform-plan:
+    needs: terraform-linter
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+
+    - name: Terraform Init
+      run: terraform init -backend-config="access_key=${{secrets.STORAGE_ACCOUNT_KEY}}"
+
+    - name: Terraform Plan
+      run: terraform plan
+
+  terraform-apply:
+    if: ${{ success() }}
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    environment: testing
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+
+    - name: Terraform Init
+      run: terraform init -backend-config="access_key=${{secrets.STORAGE_ACCOUNT_KEY}}"
+
+    - name: Terraform Apply
+      run: terraform apply -auto-approve
